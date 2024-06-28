@@ -1,0 +1,9 @@
+einops
+hydra-core
+numpy
+omegaconf
+lightning
+wandb
+pytest
+pandas
+matplotlib

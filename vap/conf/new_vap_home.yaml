@@ -1,0 +1,82 @@
+# https://github.com/facebookresearch/recipes/blob/main/torchrecipes/audio/source_separation/conf/default_config.yaml
+datamodule:
+  _target_: vap.data.datamodule.VAPDataModule
+  train_path: data/splits/fisher_swb/train_sliding.csv
+  val_path: data/splits/fisher_swb/val_sliding.csv
+  test_path: data/splits/fisher_swb/test_sliding.csv
+  horizon: 2
+  sample_rate: 16000
+  frame_hz: 50
+  mono: false
+  batch_size: 4
+  num_workers: 4
+  pin_memory: true
+  prefetch_factor: 1
+
+
+module:
+  _target_: vap.model.vap_model.VAPModule
+  model:
+    _target_: vap.model.vap_model.VAP
+    bin_times: [0.2, 0.4, 0.6, 0.8]
+    frame_hz: 50
+    encoder:
+      _target_: vap.modules.encoder.EncoderCPC
+      load_pretrained: true 
+      freeze: true
+    transformer:
+      _target_: vap.modules.transformer.VapStereoTower
+      dim: 256
+      num_heads: 8
+      num_self_attn_layers: 1
+      num_cross_attn_layers: 3
+      rotary_embeddings: True
+      flash: True
+  opt_lr:  2e-3
+  opt_betas: [0.9, 0.999]
+  opt_weight_decay:  0.001
+
+trainer:
+  _target_: lightning.pytorch.Trainer
+  strategy: ddp
+  accelerator: gpu
+  devices: 1
+  default_root_dir: null
+  max_epochs: 100
+  limit_train_batches: 100
+  limit_val_batches: 100
+  val_check_interval: 1.
+  num_sanity_val_steps: 0
+  log_every_n_steps: 20
+  fast_dev_run: false
+  gradient_clip_val: 5.0
+  logger:
+    _target_: lightning.pytorch.loggers.wandb.WandbLogger
+    save_dir: runs_new
+    project: VAPNew2
+    name: VAP
+    log_model: true
+  callbacks:
+  - _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    # dirpath: /tmp/checkpoints
+    monitor: loss_vap_val 
+    mode: min
+    save_top_k: 1
+    # save_weights_only: true
+  - _target_: lightning.pytorch.callbacks.EarlyStopping
+    monitor: loss_vap_val
+    mode: min
+    patience: 100
+  - _target_: vap.callbacks.VADMaskCallback
+    probability: 0.5
+    scale: 0
+    horizon_time: 2
+    frame_hz: 50
+    on_train: true
+    on_val: false
+    on_test: false
+  - _target_: vap.callbacks.FlipChannelCallback
+    probability: 0.5
+    on_train: true
+    on_val: false
+    on_test: false

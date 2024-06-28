@@ -1,0 +1,127 @@
+.
+├── 2205.09812v1.pdf
+├── assets
+│   ├── checkpoints
+│   │   └── cpc
+│   │       └── 60k_epoch4-d0f474de.pt
+│   ├── vap_data.pt
+│   └── VapStereo.png
+├── directory_structure.txt
+├── example
+│   └── checkpoints
+│       ├── checkpoint.zip
+│       ├── README.md
+│       ├── VAPModule_state_dict.pt
+│       └── VAP_state_dict.pt
+├── LICENSE
+├── notebooks
+│   ├── EvaluationResults.ipynb
+│   ├── Events.ipynb
+│   ├── model_output.ipynb
+│   ├── README.md
+│   └── visualize_samples.ipynb
+├── pytest.ini
+├── README.md
+├── requirements.txt
+├── run.py
+├── setup.py
+├── tests
+│   ├── events
+│   │   └── test_turn_taking_events.py
+│   ├── model
+│   │   └── test_transformer.py
+│   ├── modules
+│   │   ├── test_causality.py
+│   │   ├── test_lightning_module.py
+│   │   └── test_vap.py
+│   ├── test_callbacks.py
+│   └── test_load_state_dict.py
+├── vap
+│   ├── callbacks
+│   │   ├── flip_channels.py
+│   │   ├── __init__.py
+│   │   └── vad_mask.py
+│   ├── conf
+│   │   ├── cpc_server.yaml
+│   │   ├── default_config.yaml
+│   │   ├── default_mono_config.yaml
+│   │   ├── eval_config.yaml
+│   │   ├── hubert_config.yaml
+│   │   ├── hubert_server.yaml
+│   │   ├── mms_server.yaml
+│   │   ├── mono_home.yaml
+│   │   ├── new_vap_home.yaml
+│   │   └── stereo_home_dev.yaml
+│   ├── data
+│   │   ├── create_audio_vad_csv.py
+│   │   ├── create_sliding_window_dset.py
+│   │   ├── create_splits.py
+│   │   ├── data_extraction_pipeline.bash
+│   │   ├── datamodule.py
+│   │   ├── dset_event.py
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── datamodule.cpython-310.pyc
+│   │   │   └── __init__.cpython-310.pyc
+│   │   ├── README.md
+│   │   └── sliding_window.py
+│   ├── eval_events.py
+│   ├── eval.py
+│   ├── events
+│   │   ├── events.py
+│   │   ├── __init__.py
+│   │   ├── ipu.py
+│   │   ├── new_events.py
+│   │   ├── README.md
+│   │   └── streamlit_events.py
+│   ├── functional
+│   │   ├── __init__.py
+│   │   └── intonation.py
+│   ├── __init__.py
+│   ├── main.py
+│   ├── metrics
+│   │   ├── README.md
+│   │   └── zero_shot.py
+│   ├── metricsNew.py
+│   ├── metrics.py
+│   ├── model
+│   │   └── vap_model.py
+│   ├── modules
+│   │   ├── encoder_components.py
+│   │   ├── encoder_hubert.py
+│   │   ├── encoder_mms.py
+│   │   ├── encoder.py
+│   │   ├── __init__.py
+│   │   ├── lightning_module.py
+│   │   ├── modules.py
+│   │   ├── __pycache__
+│   │   │   ├── encoder_components.cpython-310.pyc
+│   │   │   ├── encoder.cpython-310.pyc
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   └── transformer.cpython-310.pyc
+│   │   ├── test_causal.py
+│   │   ├── transformer.py
+│   │   └── VAP.py
+│   ├── objective.py
+│   ├── __pycache__
+│   │   └── __init__.cpython-310.pyc
+│   ├── train.py
+│   └── utils
+│       ├── audio.py
+│       ├── colors.py
+│       ├── __init__.py
+│       ├── plot.py
+│       ├── __pycache__
+│       │   ├── audio.cpython-310.pyc
+│       │   ├── __init__.cpython-310.pyc
+│       │   ├── plot.cpython-310.pyc
+│       │   └── utils.cpython-310.pyc
+│       └── utils.py
+├── vap.egg-info
+│   ├── dependency_links.txt
+│   ├── PKG-INFO
+│   ├── SOURCES.txt
+│   └── top_level.txt
+└── visualize_attention.ipynb
+
+25 directories, 99 files

@@ -1,0 +1,43 @@
+.
+├── Fisher
+│   ├── fe_03_p1_tran
+│   │   ├── data
+│   │   │   ├── bbn_orig
+│   │   │   │   ├── 000
+│   │   │   │   │   ├── auto-segmented
+│   │   │   │   │   │   ├── fe_03_.ana
+│   │   │   │   │   │   └── fe_03_.trn
+│   │   │   │   │   ├── originals
+│   │   │   │   │   │   └── fe_03_.txo
+│   │   │   │   │   └── rejected
+│   │   │   │   │   ├── fe_03_.ana
+│   │   │   │   │   └── fe_03_.trn
+│   │   │   │   └── ... (more numbered folders with same structure)
+│   │   ├── trans
+│   │   │   ├── 000
+│   │   │   │   └── fe_03_.txt
+│   │   │   └── ... (more numbered folders with same structure)
+│   │   └── doc
+│   │   └── various .txt and .sgm files
+│   ├── fisher_eng_tr_sp_d1
+│   │   ├── audio
+│   │   │   └── 000
+│   │   │   └── fe_03_.wav
+│   │   └── ... (more audio folders and .txt files)
+│   └── ... (more fisher_eng_tr_sp_d folders with same structure)
+└── switchboard
+├── annotations
+│   ├── swb_ms98_transcriptions
+│   │   ├── 20
+│   │   │   ├── 2001
+│   │   │   │   ├── 2001_default.json
+│   │   │   │   ├── sw2001A-ms98-a-.text
+│   │   │   │   └── sw2001B-ms98-a-.text
+│   │   │   └── ... (more numbered folders with same structure)
+│   │   └── ... (more numbered folders with same structure)
+│   └── swb.zip
+└── audio
+├── swb1_d1
+│   └── data
+│   └── sw*.wav
+└── ... (more swb1_d* folders with same structure)
