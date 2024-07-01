@@ -27,12 +27,14 @@ class VAP(nn.Module):
         transformer: nn.Module,
         bin_times: list[float] = [0.2, 0.4, 0.6, 0.8],
         frame_hz: int = 50,
+        num_sink_tokens: int = 2 # new
     ):
         super().__init__()
         self.enc_dim = getattr(encoder, "dim")
         self.dim: int = getattr(transformer, "dim")
         self.frame_hz = frame_hz
         self.objective = VAPObjective(bin_times=bin_times, frame_hz=frame_hz)
+        self.num_sink_tokens = num_sink_tokens # new
 
         # Layers
         self.encoder = encoder

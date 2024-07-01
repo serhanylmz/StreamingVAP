@@ -30,12 +30,13 @@ class MultiHeadAttention(nn.Module):
     """
 
     def __init__(
-        self, dim: int, num_heads: int, dropout: float, bias: bool = False
+        self, dim: int, num_heads: int, dropout: float, bias: bool = False, num_sink_tokens: int =2
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0
         self.num_heads = num_heads
         self.dim = dim
+        self.num_sink_tokens = num_sink_tokens ## new
 
         # key, query, value projections for all heads
         self.key = nn.Linear(dim, dim, bias=bias)
@@ -53,6 +54,9 @@ class MultiHeadAttention(nn.Module):
         # output projection
         self.proj = nn.Linear(dim, dim, bias=bias)
         self.scale = 1.0 / math.sqrt(dim)
+
+        # add parameter for sink tokens
+        self.sink_tokens = nn.Parameter(torch.randn(1, num_sink_tokens, dim)) ## new
 
     def get_scores(self, q: Tensor, k: Tensor) -> Tensor:
         """
@@ -94,10 +98,23 @@ class MultiHeadAttention(nn.Module):
         # batch size, sequence length, embedding dimensionality (n_embd)
         B, T, D = Q.size()
 
+        # Add sink tokens to the input
+        Q = torch.cat([self.sink_tokens.expand(B, -1, -1), Q], dim=1) # new
+        K = torch.cat([self.sink_tokens.expand(B, -1, -1), K], dim=1) # new
+        V = torch.cat([self.sink_tokens.expand(B, -1, -1), V], dim=1) # new
+
+        # Update T to include sink tokens
+        T += self.num_sink_tokens # new
+
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         k = self.unstack_heads(self.key(K))  # (B, heads, T, D_head)
         q = self.unstack_heads(self.query(Q))  # (B, heads, T, D_head)
         v = self.unstack_heads(self.value(V))  # (B, heads, T, D_head)
+
+        # Adjust the mask to always attend to sink tokens
+        if mask is not None: # new
+            sink_mask = torch.ones((1, 1, T, self.num_sink_tokens), device=mask.device) # new
+            mask = torch.cat([sink_mask, mask], dim=-1) # new
 
         # QK
         att = self.get_scores(q, k) * self.scale  #  (B, nh, T, T)
@@ -228,6 +245,7 @@ class TransformerLayer(nn.Module):
         ffn_activation: str = "GELU",
         dropout: float = 0.1,
         cross_attention: bool = False,
+        num_sink_tokens: int = 2, # new
     ):
         super().__init__()
         self.dim = dim
@@ -240,7 +258,7 @@ class TransformerLayer(nn.Module):
         self.ln_self_attn = nn.LayerNorm(dim)
         self.ln_ffnetwork = nn.LayerNorm(dim)
         self.mha = MultiHeadAttentionAlibi(
-            dim=dim, num_heads=num_heads, dropout=dropout
+            dim=dim, num_heads=num_heads, dropout=dropout, num_sink_tokens=num_sink_tokens # new: added num_sink_tokens=num_sink_tokens
         )
         self.ffnetwork = ffn_block(
             dim, ffn_dim, activation=ffn_activation, dropout=dropout
@@ -261,6 +279,12 @@ class TransformerLayer(nn.Module):
         """
         Using pre-layer-normalization: https://arxiv.org/pdf/2002.04745.pdf
         """
+
+        # Adjust the mask for sink tokens
+        if mask is not None: # new
+            B, T = mask.shape[:2] # new
+            sink_mask = torch.ones((B, self.mha.num_sink_tokens), device=mask.device) # new
+            mask = torch.cat([sink_mask, mask], dim=1) # new
 
         # Self-attention
         z = self.ln_self_attn(x)

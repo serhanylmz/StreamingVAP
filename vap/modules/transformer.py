@@ -6,7 +6,8 @@ from functools import partial
 from x_transformers.x_transformers import *
 from typing import Optional
 
-
+from x_transformers.x_transformers import AttentionLayers
+from x_transformers.x_transformers import Attention, FeedForward
 
 def get_device(layer: nn.Module):
     return next(layer.parameters()).device
@@ -529,6 +530,7 @@ class VapStereoTower(nn.Module):
         num_cross_attn_layers: int = 3,
         rotary_embeddings: bool = True,
         flash: bool = True,
+        num_sink_tokens: int = 2,  # new Add this parameter
     ):
         super().__init__()
         self.dim = dim
@@ -536,6 +538,10 @@ class VapStereoTower(nn.Module):
         self.num_self_attn_layers = num_self_attn_layers
         self.num_cross_attn_layers = num_cross_attn_layers
         self.rotary_embeddings = rotary_embeddings
+        self.num_sink_tokens = num_sink_tokens  # new Store this parameter
+
+        # Create attention sinks
+        self.attention_sinks = nn.Parameter(torch.randn(1, num_sink_tokens, dim)) # new
 
         self.self_attn_layers = (
             AttentionLayers(
@@ -561,6 +567,7 @@ class VapStereoTower(nn.Module):
                 alibi_pos_bias=not rotary_embeddings,
                 ff_glu=True,
                 attn_flash=flash,
+                num_sink_tokens=num_sink_tokens,  # new Pass this to AttentionStereoLayer
             )
             self.cross_layers = nn.ModuleList(
                 [layer_fn() for _ in range(num_cross_attn_layers)]
@@ -569,10 +576,29 @@ class VapStereoTower(nn.Module):
             self.cross_layers = nn.Identity()
 
     def forward(self, x1, x2):
+        # Add attention sinks to inputs
+        x1 = torch.cat([self.attention_sinks.expand(x1.shape[0], -1, -1), x1], dim=1) # new
+        x2 = torch.cat([self.attention_sinks.expand(x2.shape[0], -1, -1), x2], dim=1) # new
+
+        # Self-attention
         x1 = self.self_attn_layers(x1)
         x2 = self.self_attn_layers(x2)
-        for layer in self.cross_layers:
-            x1, x2 = layer(x1, x2)
+
+        #Cross-attention -  old
+        # for layer in self.cross_layers: # old
+        #     x1, x2 = layer(x1, x2) # old
+
+        # Cross-attention - new
+        for layer in self.cross_layers: # new
+            x1 = layer['attention'](x1, context=x2) + x1 # new
+            x1 = layer['ff'](x1) + x1 # new
+            x2 = layer['attention'](x2, context=x1) + x2 # new
+            x2 = layer['ff'](x2) + x2 # new
+
+        # Remove attention sinks from outputs
+        x1 = x1[:, self.num_sink_tokens:] # new
+        x2 = x2[:, self.num_sink_tokens:] # new
+
         return x1, x2
 
 

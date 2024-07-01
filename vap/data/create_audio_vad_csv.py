@@ -8,8 +8,8 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
-    parser.add_argument("--audio_dir", type=str)
-    parser.add_argument("--vad_dir", type=str)
+    parser.add_argument("--audio_dir", type=str, default="/home/erik/projects/data/Fisher/fisher_eng_tr_sp_d1/audio/000")
+    parser.add_argument("--vad_dir", type=str, default="/home/erik/projects/data/Fisher/fisher_eng_tr_sp_d1/audio/000")
     parser.add_argument("--output", type=str, default="data/audio_vad.csv")
     args = parser.parse_args()
 

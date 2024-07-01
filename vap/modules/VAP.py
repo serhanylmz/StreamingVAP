@@ -181,6 +181,7 @@ class VAP(nn.Module):
         transformer: nn.Module,
         bin_times: list[float] = [0.2, 0.4, 0.6, 0.8],
         frame_hz: int = 50,
+        num_sink_tokens: int = 2 # new
     ):
         super().__init__()
         self.encoder = encoder
@@ -188,6 +189,7 @@ class VAP(nn.Module):
         self.objective = VAPObjective(bin_times=bin_times, frame_hz=frame_hz)
         self.frame_hz = frame_hz
         self.dim: int = getattr(self.transformer, "dim", 256)
+        self.num_sink_tokens = num_sink_tokens # new
 
         self.feature_projection = nn.Identity()
         if self.encoder.dim != self.transformer.dim:
@@ -237,7 +239,20 @@ class VAP(nn.Module):
         x1, x2 = self.encode_audio(waveform)
         x1 = self.feature_projection(x1)
         x2 = self.feature_projection(x2)
+
+        # Add sink tokens to the input
+        sink_tokens = self.transformer.ar.layers[0].mha.sink_tokens.expand(x1.shape[0], -1, -1) # new
+        x1 = torch.cat([sink_tokens, x1], dim=1) # new
+        x2 = torch.cat([sink_tokens, x2], dim=1) # new
+
         out = self.transformer(x1, x2, attention=attention)
+
+        # Remove sink tokens from the output
+        out['x'] = out['x'][:, self.num_sink_tokens:] # new
+        out['x1'] = out['x1'][:, self.num_sink_tokens:] # new
+        out['x2'] = out['x2'][:, self.num_sink_tokens:] # new
+
+    
         logits, vad = self.head(out["x"], out["x1"], out["x2"])
         out["logits"] = logits
         out["vad"] = vad

@@ -20,6 +20,7 @@ module:
     _target_: vap.model.vap_model.VAP
     bin_times: [0.2, 0.4, 0.6, 0.8]
     frame_hz: 50
+    num_sink_tokens: 2  # New parameter for attention sinks
     encoder:
       _target_: vap.modules.encoder.EncoderCPC
       load_pretrained: true 
@@ -32,9 +33,10 @@ module:
       num_cross_attn_layers: 3
       rotary_embeddings: True
       flash: True
-  opt_lr:  2e-3
+      num_sink_tokens: 2  # New parameter for attention sinks
+  opt_lr: 1e-4  # Reduced learning rate for fine-tuning
   opt_betas: [0.9, 0.999]
-  opt_weight_decay:  0.001
+  opt_weight_decay: 0.001
 
 trainer:
   _target_: lightning.pytorch.Trainer
@@ -42,7 +44,7 @@ trainer:
   accelerator: gpu
   devices: 1
   default_root_dir: null
-  max_epochs: 100
+  max_epochs: 50  # Reduced number of epochs for initial fine-tuning
   limit_train_batches: 100
   limit_val_batches: 100
   val_check_interval: 1.
@@ -54,7 +56,7 @@ trainer:
     _target_: lightning.pytorch.loggers.wandb.WandbLogger
     save_dir: runs_new
     project: VAPNew2
-    name: VAP
+    name: VAP_AttentionSinks  # Updated name to reflect the new model
     log_model: true
   callbacks:
   - _target_: lightning.pytorch.callbacks.ModelCheckpoint
@@ -66,7 +68,7 @@ trainer:
   - _target_: lightning.pytorch.callbacks.EarlyStopping
     monitor: loss_vap_val
     mode: min
-    patience: 100
+    patience: 20  # Reduced patience for faster stopping if not improving
   - _target_: vap.callbacks.VADMaskCallback
     probability: 0.5
     scale: 0
