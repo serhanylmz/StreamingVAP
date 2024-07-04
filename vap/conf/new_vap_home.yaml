@@ -1,9 +1,9 @@
 # https://github.com/facebookresearch/recipes/blob/main/torchrecipes/audio/source_separation/conf/default_config.yaml
 datamodule:
   _target_: vap.data.datamodule.VAPDataModule
-  train_path: data/splits/fisher_swb/train_sliding.csv
-  val_path: data/splits/fisher_swb/val_sliding.csv
-  test_path: data/splits/fisher_swb/test_sliding.csv
+  train_path: /home/erik/projects/CCConv/VoiceActivityProjection/data/splits/fis_swb/train_sliding.csv
+  val_path: /home/erik/projects/CCConv/VoiceActivityProjection/data/splits/fis_swb/val_sliding.csv
+  test_path: /home/erik/projects/CCConv/VoiceActivityProjection/data/splits/fis_swb/test_sliding.csv
   horizon: 2
   sample_rate: 16000
   frame_hz: 50
