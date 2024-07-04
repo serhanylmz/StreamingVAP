@@ -56,7 +56,7 @@ trainer:
     _target_: lightning.pytorch.loggers.wandb.WandbLogger
     save_dir: runs_new
     project: VAPNew2
-    name: VAP_AttentionSinks  # Updated name to reflect the new model
+    name: VAP_AttentionSinks-4  # Updated name to reflect the new model
     log_model: true
   callbacks:
   - _target_: lightning.pytorch.callbacks.ModelCheckpoint
