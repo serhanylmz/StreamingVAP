@@ -5,9 +5,8 @@ import torch.nn.functional as F
 from functools import partial
 from x_transformers.x_transformers import *
 from typing import Optional
+from x_transformers.x_transformers import AttentionLayers, Attention, FeedForward
 
-from x_transformers.x_transformers import AttentionLayers
-from x_transformers.x_transformers import Attention, FeedForward
 
 def get_device(layer: nn.Module):
     return next(layer.parameters()).device
@@ -501,25 +500,96 @@ class AttentionLayersCustom(nn.Module):
         return x, intermediates
 
 
-class AttentionStereoLayer(AttentionLayersCustom):
-    def forward(
-        self,
-        x1,
-        x2,
-        mask=None,
-        context_mask=None,
-        attn_mask=None,
-        self_attn_kv_mask=None,
-        mems=None,
-        seq_start_pos: Optional[Tensor] = None,
-        cache: Optional[LayerIntermediates] = None,
-        cache_age=1,
-        return_hiddens=False,
-    ):
-        z1 = super().forward(x=x1, context=x2)
-        z2 = super().forward(x=x2, context=x1)
-        return z1, z2
+# # Old Implementation in the Original VAP Repo:
+# class AttentionStereoLayer(AttentionLayersCustom):
+#     def forward(
+#         self,
+#         x1,
+#         x2,
+#         mask=None,
+#         context_mask=None,
+#         attn_mask=None,
+#         self_attn_kv_mask=None,
+#         mems=None,
+#         seq_start_pos: Optional[Tensor] = None,
+#         cache: Optional[LayerIntermediates] = None,
+#         cache_age=1,
+#         return_hiddens=False,
+#     ):
+#         z1 = super().forward(x=x1, context=x2)
+#         z2 = super().forward(x=x2, context=x1)
+#         return z1, z2
 
+
+# class VapStereoTower(nn.Module):
+#     def __init__(
+#         self,
+#         dim: int = 256,
+#         num_heads: int = 4,
+#         num_self_attn_layers: int = 1,
+#         num_cross_attn_layers: int = 3,
+#         rotary_embeddings: bool = True,
+#         flash: bool = True,
+#     ):
+#         super().__init__()
+#         self.dim = dim
+#         self.num_heads = num_heads
+#         self.num_self_attn_layers = num_self_attn_layers
+#         self.num_cross_attn_layers = num_cross_attn_layers
+#         self.rotary_embeddings = rotary_embeddings
+
+#         self.self_attn_layers = (
+#             AttentionLayers(
+#                 dim=dim,
+#                 depth=num_self_attn_layers,
+#                 heads=num_heads,
+#                 causal=True,
+#                 rotary_xpos=True,
+#                 ff_glu=True,
+#                 attn_flash=flash,
+#             )
+#             if num_self_attn_layers > 0
+#             else nn.Identity()
+#         )
+
+#         if num_cross_attn_layers > 0:
+#             layer_fn = partial(
+#                 AttentionStereoLayer,
+#                 dim=dim,
+#                 depth=1,
+#                 heads=num_heads,
+#                 rotary_xpos=rotary_embeddings,
+#                 alibi_pos_bias=not rotary_embeddings,
+#                 ff_glu=True,
+#                 attn_flash=flash,
+#             )
+#             self.cross_layers = nn.ModuleList(
+#                 [layer_fn() for _ in range(num_cross_attn_layers)]
+#             )
+#         else:
+#             self.cross_layers = nn.Identity()
+
+#     def forward(self, x1, x2):
+#         x1 = self.self_attn_layers(x1)
+#         x2 = self.self_attn_layers(x2)
+#         for layer in self.cross_layers:
+#             x1, x2 = layer(x1, x2)
+#         return x1, x2
+
+
+# # New Implementation with Attention Sinks:
+
+
+class AttentionStereoLayer(nn.Module):
+    def __init__(self, dim, heads, causal=True, flash=True):
+        super().__init__()
+        self.attention = Attention(dim, heads=heads, causal=causal, flash=flash)
+        self.ff = FeedForward(dim, glu=True)
+
+    def forward(self, x, context=None):
+        x = self.attention(x, context=context) + x
+        x = self.ff(x) + x
+        return x
 
 class VapStereoTower(nn.Module):
     def __init__(
@@ -530,7 +600,7 @@ class VapStereoTower(nn.Module):
         num_cross_attn_layers: int = 3,
         rotary_embeddings: bool = True,
         flash: bool = True,
-        num_sink_tokens: int = 2,  # new Add this parameter
+        num_sink_tokens: int = 2,
     ):
         super().__init__()
         self.dim = dim
@@ -538,66 +608,51 @@ class VapStereoTower(nn.Module):
         self.num_self_attn_layers = num_self_attn_layers
         self.num_cross_attn_layers = num_cross_attn_layers
         self.rotary_embeddings = rotary_embeddings
-        self.num_sink_tokens = num_sink_tokens  # new Store this parameter
+        self.num_sink_tokens = num_sink_tokens
 
         # Create attention sinks
-        self.attention_sinks = nn.Parameter(torch.randn(1, num_sink_tokens, dim)) # new
+        self.attention_sinks = nn.Parameter(torch.randn(1, num_sink_tokens, dim))
 
-        self.self_attn_layers = (
-            AttentionLayers(
+        # Self-attention layers
+        if num_self_attn_layers > 0:
+            self.self_attn_layers = AttentionLayers(
                 dim=dim,
                 depth=num_self_attn_layers,
                 heads=num_heads,
                 causal=True,
-                rotary_xpos=True,
-                ff_glu=True,
-                attn_flash=flash,
-            )
-            if num_self_attn_layers > 0
-            else nn.Identity()
-        )
-
-        if num_cross_attn_layers > 0:
-            layer_fn = partial(
-                AttentionStereoLayer,
-                dim=dim,
-                depth=1,
-                heads=num_heads,
                 rotary_xpos=rotary_embeddings,
-                alibi_pos_bias=not rotary_embeddings,
                 ff_glu=True,
                 attn_flash=flash,
-                num_sink_tokens=num_sink_tokens,  # new Pass this to AttentionStereoLayer
             )
-            self.cross_layers = nn.ModuleList(
-                [layer_fn() for _ in range(num_cross_attn_layers)]
-            )
+        else:
+            self.self_attn_layers = nn.Identity()
+
+        # Cross-attention layers
+        if num_cross_attn_layers > 0:
+            self.cross_layers = nn.ModuleList([
+                AttentionStereoLayer(dim, heads=num_heads, causal=True, flash=flash)
+                for _ in range(num_cross_attn_layers)
+            ])
         else:
             self.cross_layers = nn.Identity()
 
     def forward(self, x1, x2):
         # Add attention sinks to inputs
-        x1 = torch.cat([self.attention_sinks.expand(x1.shape[0], -1, -1), x1], dim=1) # new
-        x2 = torch.cat([self.attention_sinks.expand(x2.shape[0], -1, -1), x2], dim=1) # new
+        x1 = torch.cat([self.attention_sinks.expand(x1.shape[0], -1, -1), x1], dim=1)
+        x2 = torch.cat([self.attention_sinks.expand(x2.shape[0], -1, -1), x2], dim=1)
 
         # Self-attention
         x1 = self.self_attn_layers(x1)
         x2 = self.self_attn_layers(x2)
 
-        #Cross-attention -  old
-        # for layer in self.cross_layers: # old
-        #     x1, x2 = layer(x1, x2) # old
-
-        # Cross-attention - new
-        for layer in self.cross_layers: # new
-            x1 = layer['attention'](x1, context=x2) + x1 # new
-            x1 = layer['ff'](x1) + x1 # new
-            x2 = layer['attention'](x2, context=x1) + x2 # new
-            x2 = layer['ff'](x2) + x2 # new
+        # Cross-attention
+        for layer in self.cross_layers:
+            x1 = layer(x1, context=x2)
+            x2 = layer(x2, context=x1)
 
         # Remove attention sinks from outputs
-        x1 = x1[:, self.num_sink_tokens:] # new
-        x2 = x2[:, self.num_sink_tokens:] # new
+        x1 = x1[:, self.num_sink_tokens:]
+        x2 = x2[:, self.num_sink_tokens:]
 
         return x1, x2
 
