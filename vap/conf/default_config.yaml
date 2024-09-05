@@ -1,9 +1,9 @@
 # https://github.com/facebookresearch/recipes/blob/main/torchrecipes/audio/source_separation/conf/default_config.yaml
 datamodule:
   _target_: vap.data.datamodule.VAPDataModule
-  train_path: "example/data/sliding_dev.csv"
-  val_path: "example/data/sliding_dev.csv"
-  test_path: "example/data/sliding_dev.csv"
+  train_path: /home/erik/projects/CCConv/VoiceActivityProjection/data/splits/fis_swb/train_sliding.csv
+  val_path: /home/erik/projects/CCConv/VoiceActivityProjection/data/splits/fis_swb/val_sliding.csv
+  test_path: /home/erik/projects/CCConv/VoiceActivityProjection/data/splits/fis_swb/test_sliding.csv
   horizon: 2
   sample_rate: 16000
   frame_hz: 50
@@ -20,6 +20,7 @@ module:
     _target_: vap.modules.VAP.VAP
     bin_times: [0.2, 0.4, 0.6, 0.8]
     frame_hz: 50
+    num_sink_tokens: 2  # New parameter for attention sinks
     encoder:
       _target_: vap.modules.encoder.EncoderCPC
       load_pretrained: true 
@@ -32,10 +33,11 @@ module:
       num_heads: 4
       dff_k: 3
       dropout: 0.1
+      num_sink_tokens: 2  # New: Added this line
   optim_fn:
     _target_: torch.optim.AdamW
     _partial_: true
-    lr:  3.63e-4
+    lr: 1e-4 # 3.63e-4
     betas: [0.9, 0.999]
     weight_decay:  0.001
   lr_scheduler:
@@ -79,18 +81,18 @@ trainer:
   limit_train_batches: 1.0
   val_check_interval: 0.5
   num_sanity_val_steps: 0
-  log_every_n_steps: 500
+  log_every_n_steps: 1
   fast_dev_run: false
   gradient_clip_val: 5.0
   logger:
     _target_: lightning.pytorch.loggers.wandb.WandbLogger
     save_dir: runs_new
     project: VAP2
-    name: VAP2
+    name: VAP2-attention-sink
     log_model: false
   callbacks:
   - _target_: lightning.pytorch.callbacks.ModelCheckpoint
-    # dirpath: /tmp/checkpoints
+    dirpath: /home/serhan/Desktop
     monitor: val_loss
     mode: min
     save_top_k: 1
