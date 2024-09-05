@@ -23,6 +23,8 @@ __pycache__/
 # C extensions
 *.so
 
+# sound files
+*.wav
 # Distribution / packaging
 .Python
 build/
