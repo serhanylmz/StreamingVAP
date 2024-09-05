@@ -11,6 +11,8 @@ from vap.metrics import VAPMetric
 from vap.modules.VAP import VAP
 from vap.utils.utils import everything_deterministic
 
+from vap.modules.encoder import EncoderCPC
+from vap.modules.transformer import VapStereoTower
 
 Batch = Mapping[str, Tensor]
 
@@ -26,6 +28,7 @@ class VAPModule(L.LightningModule):
         train_metric: Optional[VAPMetric] = None,
         val_metric: Optional[VAPMetric] = None,
         test_metric: Optional[VAPMetric] = None,
+        num_sink_tokens = 2,  # New parameter for attention sinks
     ):
         super().__init__()
         self.model = model
@@ -38,6 +41,7 @@ class VAPModule(L.LightningModule):
         self.train_metric = train_metric
         self.val_metric = val_metric
         self.test_metric = test_metric
+        self.num_sink_tokens = num_sink_tokens # New parameter for attention sinks
         self.save_hyperparameters()  # ignore=["model"])
 
     def forward(self, waveform: Tensor, *args, **kwargs) -> dict[str, Tensor]:

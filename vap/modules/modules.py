@@ -30,13 +30,13 @@ class MultiHeadAttention(nn.Module):
     """
 
     def __init__(
-        self, dim: int, num_heads: int, dropout: float, bias: bool = False, num_sink_tokens: int =2
+        self, dim: int, num_heads: int, dropout: float, bias: bool = False, num_sink_tokens: int = 2  # Added num_sink_tokens parameter
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0
         self.num_heads = num_heads
         self.dim = dim
-        self.num_sink_tokens = num_sink_tokens ## new
+        self.num_sink_tokens = num_sink_tokens  # Added this line
 
         # key, query, value projections for all heads
         self.key = nn.Linear(dim, dim, bias=bias)
@@ -56,7 +56,7 @@ class MultiHeadAttention(nn.Module):
         self.scale = 1.0 / math.sqrt(dim)
 
         # add parameter for sink tokens
-        self.sink_tokens = nn.Parameter(torch.randn(1, num_sink_tokens, dim)) ## new
+        self.sink_tokens = nn.Parameter(torch.randn(1, num_sink_tokens, dim))  # Added this line
 
     def get_scores(self, q: Tensor, k: Tensor) -> Tensor:
         """
@@ -99,25 +99,23 @@ class MultiHeadAttention(nn.Module):
         B, T, D = Q.size()
 
         # Add sink tokens to the input
-        Q = torch.cat([self.sink_tokens.expand(B, -1, -1), Q], dim=1) # new
-        K = torch.cat([self.sink_tokens.expand(B, -1, -1), K], dim=1) # new
-        V = torch.cat([self.sink_tokens.expand(B, -1, -1), V], dim=1) # new
+        Q = torch.cat([self.sink_tokens.expand(B, -1, -1), Q], dim=1)  # Added this line
+        K = torch.cat([self.sink_tokens.expand(B, -1, -1), K], dim=1)  # Added this line
+        V = torch.cat([self.sink_tokens.expand(B, -1, -1), V], dim=1)  # Added this line
 
         # Update T to include sink tokens
-        T += self.num_sink_tokens # new
+        T += self.num_sink_tokens  # Added this line
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        k = self.unstack_heads(self.key(K))  # (B, heads, T, D_head)
-        q = self.unstack_heads(self.query(Q))  # (B, heads, T, D_head)
-        v = self.unstack_heads(self.value(V))  # (B, heads, T, D_head)
+        k = self.unstack_heads(self.key(K))
+        q = self.unstack_heads(self.query(Q))
+        v = self.unstack_heads(self.value(V))
 
         # Adjust the mask to always attend to sink tokens
-        if mask is not None: # new
-            sink_mask = torch.ones((1, 1, T, self.num_sink_tokens), device=mask.device) # new
-            mask = torch.cat([sink_mask, mask], dim=-1) # new
+        if mask is not None:  # Added this block
+            sink_mask = torch.ones((1, 1, T, self.num_sink_tokens), device=mask.device)
+            mask = torch.cat([sink_mask, mask], dim=-1)
 
-        # QK
-        att = self.get_scores(q, k) * self.scale  #  (B, nh, T, T)
+        att = self.get_scores(q, k) * self.scale
         att = self.mask_scores(att, mask)
         att = F.softmax(att, dim=-1)
 
@@ -134,10 +132,9 @@ class MultiHeadAttention(nn.Module):
 
 class MultiHeadAttentionAlibi(MultiHeadAttention):
     def __init__(
-        self, dim: int, num_heads: int, dropout: float, bias: bool = False
+        self, dim: int, num_heads: int, dropout: float, bias: bool = False, num_sink_tokens: int = 2  # Added num_sink_tokens parameter
     ) -> None:
-        super().__init__(dim, num_heads, dropout, bias)
-        # self.m = torch.tensor(MultiHeadAttentionAlibi.get_slopes(num_heads))
+        super().__init__(dim, num_heads, dropout, bias, num_sink_tokens)  # Updated to pass num_sink_tokens
         self.register_parameter(
             "m",
             nn.Parameter(torch.tensor(MultiHeadAttentionAlibi.get_slopes(num_heads))),
@@ -245,7 +242,7 @@ class TransformerLayer(nn.Module):
         ffn_activation: str = "GELU",
         dropout: float = 0.1,
         cross_attention: bool = False,
-        num_sink_tokens: int = 2, # new
+        num_sink_tokens: int = 2,
     ):
         super().__init__()
         self.dim = dim
@@ -253,12 +250,13 @@ class TransformerLayer(nn.Module):
         self.num_heads = num_heads
         self.dropout_p = dropout
         self.cross_attention = cross_attention
+        self.num_sink_tokens = num_sink_tokens
 
         self.dropout = nn.Dropout(p=dropout)
         self.ln_self_attn = nn.LayerNorm(dim)
         self.ln_ffnetwork = nn.LayerNorm(dim)
         self.mha = MultiHeadAttentionAlibi(
-            dim=dim, num_heads=num_heads, dropout=dropout, num_sink_tokens=num_sink_tokens # new: added num_sink_tokens=num_sink_tokens
+            dim=dim, num_heads=num_heads, dropout=dropout, num_sink_tokens=num_sink_tokens
         )
         self.ffnetwork = ffn_block(
             dim, ffn_dim, activation=ffn_activation, dropout=dropout
@@ -267,7 +265,7 @@ class TransformerLayer(nn.Module):
         if cross_attention:
             self.ln_src_attn = nn.LayerNorm(dim)
             self.mha_cross = MultiHeadAttentionAlibi(
-                dim=dim, num_heads=num_heads, dropout=dropout
+                dim=dim, num_heads=num_heads, dropout=dropout, num_sink_tokens=num_sink_tokens
             )
 
     def forward(
@@ -276,37 +274,33 @@ class TransformerLayer(nn.Module):
         src: Optional[torch.Tensor] = None,
         mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
-        """
-        Using pre-layer-normalization: https://arxiv.org/pdf/2002.04745.pdf
-        """
-
         # Adjust the mask for sink tokens
-        if mask is not None: # new
-            B, T = mask.shape[:2] # new
-            sink_mask = torch.ones((B, self.mha.num_sink_tokens), device=mask.device) # new
-            mask = torch.cat([sink_mask, mask], dim=1) # new
+        if mask is not None:
+            B, T = mask.shape[:2]
+            sink_mask = torch.ones((B, self.num_sink_tokens), device=mask.device)
+            mask = torch.cat([sink_mask, mask], dim=1)
 
         # Self-attention
         z = self.ln_self_attn(x)
         self_attn, self_attn_weights = self.mha(Q=z, K=z, V=z, mask=mask)
 
-        # Residual
-        x = x + self.dropout(self_attn)
+        # Residual connection (remove sink tokens before adding)
+        x = x + self.dropout(self_attn[:, self.num_sink_tokens:])
 
         # Cross-attention
         cross_attn_weights = None
         if self.cross_attention and src is not None:
             z = self.ln_src_attn(x)
-            # https://nn.labml.ai/transformers/models.html#section-16
-            # Don't normalize src... why?
             cross_attn, cross_attn_weights = self.mha_cross(
                 Q=z, K=src, V=src, mask=mask
             )
-            x = x + self.dropout(cross_attn)
+            x = x + self.dropout(cross_attn[:, self.num_sink_tokens:])
 
-        x = x + self.dropout(self.ffnetwork(self.ln_ffnetwork(x)))
+        # Feed-forward network
+        z = self.ln_ffnetwork(x)
+        x = x + self.dropout(self.ffnetwork(z))
+
         return x, self_attn_weights, cross_attn_weights
-
 
 class TransformerStereoLayer(TransformerLayer):
     def forward(
@@ -337,6 +331,7 @@ class GPT(nn.Module):
         num_heads: int = 4,
         activation: str = "GELU",
         dropout: float = 0.1,
+        num_sink_tokens: int = 2,  # Added num_sink_tokens parameter
     ):
         super().__init__()
         self.dim = dim
@@ -345,6 +340,7 @@ class GPT(nn.Module):
         self.num_heads = num_heads
         self.activation = activation
         self.dropout = dropout
+        self.num_sink_tokens = num_sink_tokens  # Added this line
 
         self._build_layers()
         self.apply(self._init_weights)
@@ -359,6 +355,7 @@ class GPT(nn.Module):
                     num_heads=self.num_heads,
                     ffn_activation=self.activation,
                     dropout=self.dropout,
+                    num_sink_tokens=self.num_sink_tokens,  # Added this line
                 )
             )
         self.layers = nn.ModuleList(layers)
@@ -403,6 +400,7 @@ class GPTStereo(GPT):
                     ffn_activation=self.activation,
                     dropout=self.dropout,
                     cross_attention=True,
+                    num_sink_tokens=self.num_sink_tokens,  # Added this line
                 )
             )
         self.layers = nn.ModuleList(layers)
@@ -481,7 +479,6 @@ class Combinator(nn.Module):
         h = ha + hb  # combine estimations from both parties
         return h
 
-
 class TransformerStereo(nn.Module):
     def __init__(
         self,
@@ -491,18 +488,22 @@ class TransformerStereo(nn.Module):
         num_heads: int = 4,
         dff_k: int = 3,
         dropout: float = 0.1,
+        num_sink_tokens: int = 2,  # Added num_sink_tokens parameter
     ) -> None:
         super().__init__()
         assert self_layers > 0, f"Must have at least one self layer. got {self_layers}"
-        assert (
-            cross_layers > 0
-        ), f"Must have at least one cross layer. got {cross_layers}"
+        assert cross_layers > 0, f"Must have at least one cross layer. got {cross_layers}"
+        
         self.dim = dim
         self.self_layers = self_layers
         self.cross_layers = cross_layers
         self.num_heads = num_heads
         self.dff_k = dff_k
         self.dropout = dropout
+        self.num_sink_tokens = num_sink_tokens  # Added this line
+
+        # Attention sinks
+        self.attention_sinks = nn.Parameter(torch.randn(1, num_sink_tokens, dim))  # Added this line
 
         # Single channel
         self.ar_channel = GPT(
@@ -511,6 +512,7 @@ class TransformerStereo(nn.Module):
             num_layers=self_layers,
             num_heads=num_heads,
             dropout=dropout,
+            num_sink_tokens=num_sink_tokens,  # Added this line
         )
 
         # Cross channel
@@ -520,19 +522,36 @@ class TransformerStereo(nn.Module):
             num_layers=cross_layers,
             num_heads=num_heads,
             dropout=dropout,
+            num_sink_tokens=num_sink_tokens,  # Added this line
         )
 
     def forward(
         self, x1: Tensor, x2: Tensor, attention: bool = False
     ) -> Mapping[str, Tensor]:
-        o1 = self.ar_channel(x1, attention=attention)  # ["x"]
-        o2 = self.ar_channel(x2, attention=attention)  # ["x"]
+        # Add attention sinks to inputs
+        x1_with_sinks = torch.cat([self.attention_sinks.expand(x1.shape[0], -1, -1), x1], dim=1)  # Added this line
+        x2_with_sinks = torch.cat([self.attention_sinks.expand(x2.shape[0], -1, -1), x2], dim=1)  # Added this line
+
+        # Self-attention layers
+        o1 = self.ar_channel(x1_with_sinks, attention=attention)  # Updated this line
+        o2 = self.ar_channel(x2_with_sinks, attention=attention)  # Updated this line
+
+        # Cross-attention layers
         out = self.ar(o1["x"], o2["x"], attention=attention)
+
+        # Remove attention sinks from outputs
+        out["x"] = out["x"][:, self.num_sink_tokens:]  # Added this line
+        out["x1"] = out["x1"][:, self.num_sink_tokens:]  # Added this line
+        out["x2"] = out["x2"][:, self.num_sink_tokens:]  # Added this line
 
         if attention:
             out["cross_self_attn"] = out["self_attn"]
-            out["self_attn"] = torch.stack([o1["attn"], o2["attn"]], dim=1)
-            out["cross_attn"] = out["cross_attn"]
+            out["self_attn"] = torch.stack([
+                o1["attn"][:, :, self.num_sink_tokens:, self.num_sink_tokens:],  # Updated this line
+                o2["attn"][:, :, self.num_sink_tokens:, self.num_sink_tokens:]  # Updated this line
+            ], dim=1)
+            out["cross_attn"] = out["cross_attn"][:, :, :, self.num_sink_tokens:, self.num_sink_tokens:]  # Updated this line
+
         return out
 
 
